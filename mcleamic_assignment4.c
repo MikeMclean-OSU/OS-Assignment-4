@@ -49,6 +49,11 @@ int main()
 {
 
 	struct command_line *curr_command;
+	struct sigaction SIGTERM_action = {0};
+
+	SIGTERM_action.sa_handler = SIG_DFL;
+	sigfillset(&SIGTERM_action.sa_mask);
+	sigaction(SIGTERM, &SIGTERM_action, NULL);
 
 	while(true)
 	{
@@ -58,12 +63,22 @@ int main()
 			continue;
 			
 		} else if (!strcmp(token, "exit")){
-			printf("exit command entered\n");
 			kill(0, SIGTERM);
+			break;
 		
 		} else if (!strcmp(token, "cd")){
-			printf("cd command entered\n");
-		
+			if (!curr_command->argv[1]){
+				printf("%s", getenv("PATH"));
+				//chdir(getenv("PATH"));
+				continue;
+			}
+			
+			// if (chdir(curr_command->argv[1]) != 0){
+			// 	perror("Directory Change Failed");
+			// 	continue;
+			// } else{
+				
+			// }
 		
 		} else if (!strcmp(token, "status")){
 			printf("status command entered\n");
