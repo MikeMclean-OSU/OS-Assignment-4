@@ -1,16 +1,11 @@
-/**
- * A sample program for parsing a command line. If you find it useful,
- * feel free to adapt this code for Assignment 4.
- * Do fix memory leaks and any additional issues you find.
- */
-
 #include <stdio.h>
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
+#include <signal.h>
 
 #define INPUT_LENGTH 2048
-#define MAX_ARGS		 512
+#define MAX_ARGS 512
 
 
 struct command_line
@@ -52,11 +47,29 @@ struct command_line *parse_input()
 
 int main()
 {
+
 	struct command_line *curr_command;
 
 	while(true)
 	{
 		curr_command = parse_input();
+		char *token = curr_command->argv[0];
+		if (!token || token[0] == '#'){
+			continue;
+			
+		} else if (!strcmp(token, "exit")){
+			printf("exit command entered\n");
+			kill(0, SIGTERM);
+		
+		} else if (!strcmp(token, "cd")){
+			printf("cd command entered\n");
+		
+		
+		} else if (!strcmp(token, "status")){
+			printf("status command entered\n");
+		
+		
+		}
 
 	}
 	return EXIT_SUCCESS;
