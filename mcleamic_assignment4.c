@@ -50,10 +50,9 @@ struct command_line *parse_input()
 
 int main()
 {
-
+	int childStatus;
 	struct command_line *curr_command;
 	struct sigaction SIGTERM_action = {0};
-	int childStatus;
 
 	SIGTERM_action.sa_handler = SIG_DFL;
 	sigfillset(&SIGTERM_action.sa_mask);
@@ -99,10 +98,13 @@ int main()
 			exit(1);
 		}else if(childpid == 0){
 			//child case
+
+			//Redirect output if file is given
 			if (curr_command->output_file){
 				int fd_out = open(curr_command->output_file, O_WRONLY | O_CREAT, 0640);
 				int redirect_out = dup2(fd_out, 1);
 			}
+			//Redirect input if file is given
 			if (curr_command->input_file){
 				int fd_in = open(curr_command->input_file, O_RDONLY, 0640);
 				if (fd_in == -1){
@@ -111,11 +113,28 @@ int main()
 				}
 				int redirect_in = dup2(fd_in, 0);
 			}
+			//Redirect output of background process if no file specified
+			if (curr_command->is_bg && !curr_command->output_file){
+				int fd_out = open("/dev/null", O_WRONLY);
+				int redirect_out = dup2(fd_out, 1); 
+			}
+			//Redirect input of background process if no file specified
+			if (curr_command->is_bg && !curr_command->input_file){
+				int fd_in = open("/dev/null", O_RDONLY);
+				int redirect_out = dup2(fd_in, 0); 
+			}
+
 			execvp(token, curr_command->argv);
 			perror("Error");
 			exit(2);
 		}else{
-			childpid = waitpid(childpid, &childStatus, 0);
+			if (curr_command->is_bg){
+				printf("Background pid is %d\n", childpid);
+				fflush(stdout);
+				childpid = waitpid(childpid, &childStatus, WNOHANG);
+			}else{
+				childpid = waitpid(childpid, &childStatus, 0);
+			}
 		}	
 		
 		free(curr_command->argv);
