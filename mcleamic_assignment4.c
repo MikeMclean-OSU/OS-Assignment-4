@@ -48,8 +48,21 @@ struct command_line *parse_input()
 	return curr_command;
 }
 
+// void handle_SIGCHLD(int signo){
+// 	int status;
+// 	pid_t id = waitpid(-1, &status, WNOHANG);
+
+// 	while (id > 0){
+// 		printf("\nbackground pid %d is done: exit value %d\n", id, status);
+// 		fflush(stdout);
+// 		id = waitpid(-1, &status, WNOHANG);
+// 	}
+// }
+
 int main()
 {
+	int status;
+	pid_t id;
 	int childStatus;
 	struct command_line *curr_command;
 	struct sigaction SIGTERM_action = {0};
@@ -58,8 +71,23 @@ int main()
 	sigfillset(&SIGTERM_action.sa_mask);
 	sigaction(SIGTERM, &SIGTERM_action, NULL);
 
+	// struct sigaction SIGCHLD_action = {0};
+
+	// SIGCHLD_action.sa_handler = handle_SIGCHLD;
+	// sigemptyset(&SIGCHLD_action.sa_mask);
+	// SIGCHLD_action.sa_flags = SA_RESTART;
+	// sigaction(SIGCHLD, &SIGCHLD_action, NULL);
+
+
 	while(true)
 	{
+		id = waitpid(-1, &status, WNOHANG);
+		while (id > 0){
+			printf("background pid %d is done: exit value %d\n", id, WEXITSTATUS(status));
+			fflush(stdout);
+			id = waitpid(-1, &status, WNOHANG);
+		}
+
 		curr_command = parse_input();
 		char *token = curr_command->argv[0];
 
