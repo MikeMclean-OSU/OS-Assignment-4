@@ -12,7 +12,7 @@
 
 int fg_process = -1;
 int sigtstp_flag = 0; //0 = not foregorund only mode, 1 = foreground only mode
-
+int fg_flag = 0;
 
 struct command_line
 {
@@ -53,8 +53,7 @@ struct command_line *parse_input()
 
 void handle_SIGINT(int signo){
 	if (fg_process > -1){
-		kill(fg_process, SIGTERM);
-		fg_process = -1;
+		kill(fg_process, SIGINT);
 	}
 }
 
@@ -64,10 +63,23 @@ void handle_SIGTSTP(int signo){
 	
 	if(sigtstp_flag){
 		sigtstp_flag = 0;
-		write(STDOUT_FILENO, exit_message, 29);
+		write(STDOUT_FILENO, exit_message, 30);
 	}else{
 		sigtstp_flag = 1;
-		write(STDOUT_FILENO, enter_message, 49);
+		write(STDOUT_FILENO, enter_message, 50);
+	}
+}
+
+void free_cmd(struct command_line *cmd){
+	for (int i = 0; i < cmd->argc; i++){
+		free(cmd->argv[i]);
+	}
+	free(cmd->argv);
+	if(cmd->input_file){
+		free(cmd->input_file);
+	}
+	if(cmd->output_file){
+		free(cmd->output_file);
 	}
 }
 
@@ -106,49 +118,46 @@ int main()
 		while (id > 0){
 			if (WIFSIGNALED(status)){
 				printf("background pid %d is done: terminated by signal %d\n", id, WTERMSIG(status));
-				fflush(stdout);
 			}else{
 				printf("background pid %d is done: exit value %d\n", id, WEXITSTATUS(status));
-				fflush(stdout);
 			}
+			fflush(stdout);
 			id = waitpid(-1, &status, WNOHANG);
 		}
-
 		curr_command = parse_input();
 		char *token = curr_command->argv[0];
 
+		if (curr_command->is_bg && sigtstp_flag){
+			curr_command->is_bg = false;
+		}
+
 		if (!token || token[0] == '#'){
+			free_cmd(curr_command);
 			continue;
-		} 
-		
-		if (!strcmp(token, "exit")){
+		}else if (!strcmp(token, "exit")){
 			kill(0, SIGTERM);
 			break;
-		
 		}else if (!strcmp(token, "cd")){
 			if (!curr_command->argv[1]){
 				chdir(getenv("HOME"));
-				continue;
-			}
-			
-			if (chdir(curr_command->argv[1]) != 0){
+			}else if (chdir(curr_command->argv[1]) != 0){
 				perror("Directory Change Failed");
-				continue;
 			} else{
 				chdir(curr_command->argv[1]);
-				continue;
 			}
-		
-		}else if (!strcmp(token, "status")){
-			if(WIFSIGNALED(childStatus)){
-				printf("terminated by signal %d\n", WTERMSIG(childStatus));
-				fflush(stdout);
-			}else{
-				printf("exit value %d\n", WEXITSTATUS(childStatus));
-				fflush(stdout);
-			}
+			free_cmd(curr_command);
 			continue;
-		}
+		}else if (!strcmp(token, "status")){
+			if(WIFSIGNALED(fg_flag)){
+				printf("terminated by signal %d\n", WTERMSIG(fg_flag));
+			}else{
+				printf("exit value %d\n", WEXITSTATUS(fg_flag));
+			}
+			fflush(stdout);
+			free_cmd(curr_command);
+			continue;
+		} else {
+	
 
 		pid_t childpid = fork();
 		
@@ -164,6 +173,7 @@ int main()
 			if (curr_command->output_file){
 				int fd_out = open(curr_command->output_file, O_WRONLY | O_CREAT, 0640);
 				int redirect_out = dup2(fd_out, 1);
+				close(fd_out);
 			}
 			//Redirect input if file is given
 			if (curr_command->input_file){
@@ -173,16 +183,19 @@ int main()
 					exit(1);
 				}
 				int redirect_in = dup2(fd_in, 0);
+				close(fd_in);
 			}
 			//Redirect output of background process if no file specified
 			if (curr_command->is_bg && !curr_command->output_file && !sigtstp_flag){
 				int fd_out = open("/dev/null", O_WRONLY);
 				int redirect_out = dup2(fd_out, 1); 
+				close(fd_out);
 			}
 			//Redirect input of background process if no file specified
 			if (curr_command->is_bg && !curr_command->input_file && !sigtstp_flag){
 				int fd_in = open("/dev/null", O_RDONLY);
-				int redirect_out = dup2(fd_in, 0); 
+				int redirect_out = dup2(fd_in, 0);
+				close(fd_in);
 			}
 			
 			
@@ -195,23 +208,21 @@ int main()
 			if (curr_command->is_bg && !sigtstp_flag){
 				printf("Background pid is %d\n", childpid);
 				fflush(stdout);
-				childpid = waitpid(childpid, &childStatus, WNOHANG);
 			}else{
-				childpid = waitpid(childpid, &childStatus, 0);
+				fg_process = childpid;
+				waitpid(childpid, &childStatus, 0);
+				fg_process = -1;
+				fg_flag = childStatus;
 				if (WIFSIGNALED(childStatus)){
 					printf("terminated by signal %d\n", WTERMSIG(childStatus));
 					fflush(stdout);
+					
 				}
 			}
+			free_cmd(curr_command);
 		}	
 		
-		free(curr_command->argv);
-		if (curr_command->input_file){
-			free(curr_command->input_file);
-		}
-		if (curr_command->output_file){
-			free(curr_command->output_file);
-		}
 	}
+}
 	return EXIT_SUCCESS;
 }
